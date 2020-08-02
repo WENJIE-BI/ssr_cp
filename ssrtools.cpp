@@ -40,19 +40,6 @@ ENUMSTRINGS(ssr::enum_audio_codec) = {
     {ssr::enum_audio_codec::AUDIO_CODEC_UNCOMPRESSED, "uncompressed"},
     {ssr::enum_audio_codec::AUDIO_CODEC_OTHER, "other"},
 };
-//ENUMSTRINGS(ssr::enum_h264_preset) = {
-//    {PageOutput::H264_PRESET_ULTRAFAST, "ultrafast"},
-//    {PageOutput::H264_PRESET_SUPERFAST, "superfast"},
-//    {PageOutput::H264_PRESET_VERYFAST, "veryfast"},
-//    {PageOutput::H264_PRESET_FASTER, "faster"},
-//    {PageOutput::H264_PRESET_FAST, "fast"},
-//    {PageOutput::H264_PRESET_MEDIUM, "medium"},
-//    {PageOutput::H264_PRESET_SLOW, "slow"},
-//    {PageOutput::H264_PRESET_SLOWER, "slower"},
-//    {PageOutput::H264_PRESET_VERYSLOW, "veryslow"},
-//    {PageOutput::H264_PRESET_PLACEBO, "placebo"},
-//};
-
 
 ssrtools::ssrtools(QWidget *parent) :
     QWidget(parent),
@@ -61,10 +48,11 @@ ssrtools::ssrtools(QWidget *parent) :
     ui->setupUi(this);
     setStyle();
 
-
 //    mp->hide();
     Init();
     mp = new mypopup(this, parent);
+
+    OnUpdateVideoAreaFields();
 
     Prepare_Record();
 }
@@ -93,15 +81,11 @@ void ssrtools::Init()
     m_grabbing = false;
     m_selecting_window = false;
 
-
     Input_init();
 
     Output_init();
 
     LoadSettings();
-
-
-
 }
 
 void ssrtools::Input_init()
@@ -135,16 +119,8 @@ void ssrtools::Input_init()
     connect(ui->m_spinbox_video_h, SIGNAL(focusOut()), this, SLOT(OnUpdateRecordingFrame()));
     connect(ui->m_spinbox_video_h, SIGNAL(valueChanged(int)), this, SLOT(OnUpdateRecordingFrame()));
 
-#if SSR_USE_PULSEAUDIO
-//            m_label_pulseaudio_source = new QLabel(tr("Source:"), groupbox_audio);
     m_combobox_pulseaudio_source = new QComboBox;
-//            m_combobox_pulseaudio_source->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-//            m_combobox_pulseaudio_source->setToolTip(tr("The PulseAudio source that will be used for recording.\n"
-//                                                        "A 'monitor' is a source that records the audio played by other applications.", "Don't translate 'monitor' unless PulseAudio does this as well"));
-//            m_pushbutton_pulseaudio_refresh = new QPushButton(tr("Refresh"), groupbox_audio);
-//            m_pushbutton_pulseaudio_refresh->setToolTip(tr("Refreshes the list of PulseAudio sources."));
     LoadPulseAudioSources();
-#endif
 }
 
 void ssrtools::Output_init()
@@ -265,9 +241,14 @@ void ssrtools::Prepare_Record()
     m_timer_update_info = new QTimer(this);
     connect(m_timer_update_info, SIGNAL(timeout()), this, SLOT(OnUpdateInformation()));
 
+    connect(ui->m_pushButton_cancel, SIGNAL(clicked()), this, SLOT(OnRecordCancel()));
+    connect(ui->m_pushButton_save, SIGNAL(clicked()), this, SLOT(OnRecordSave()));
+    GroupVisible({ui->m_pushButton_cancel, ui->m_pushButton_save}, false);
+
     //record init
     m_output_started =false;
     m_input_started = false;
+    m_schedule_active = false;
     m_recorded_something = false;
 
     //get the audio input settings
@@ -280,11 +261,14 @@ void ssrtools::Prepare_Record()
 
     //bybobbi
     m_video_frame_rate = 30;
+    m_video_in_width = GetVideoW();
+    m_video_in_height = GetVideoH();
 
 #if SSR_USE_PULSEAUDIO
     m_pulseaudio_source = GetPulseAudioSourceName();
 #endif
 
+    m_separate_files = false;
 
     //get the output settings
     m_output_settings.file = QString();	//will be set later
@@ -328,13 +312,15 @@ void ssrtools::Prepare_Record()
 
     m_recorded_something = false;
 
+
     UpdateInput();
 
     OnUpdateInformation();
+    UpdateRecordButton();
     m_timer_update_info->start(1000);
 
-//    m_schedule_active = false;
-//    UpdateSchedule();
+    m_schedule_active = false;
+    UpdateSchedule();
 
 }
 
@@ -355,6 +341,142 @@ void ssrtools::LoadInputSettings(QSettings *settings)
 void ssrtools::LoadOutputSettings(QSettings *settings)
 {
     LoadOutputProfileSettings(settings);
+}
+
+void ssrtools::StopPage(bool save)
+{
+    m_schedule_active = false;
+    UpdateSchedule();
+
+    StopOutput(true);
+    StopInput();
+
+    Logger::LogInfo("[PageRecord::StopPage] " + tr("Stopping page ..."));
+
+    if(m_output_manager != NULL) {
+
+        // stop the output
+        if(save)
+            FinishOutput();
+        m_output_manager.reset();
+
+        // delete the file if it isn't needed
+        if(!save && m_file_protocol.isNull()) {
+            if(QFileInfo(m_output_settings.file).exists())
+                QFile(m_output_settings.file).remove();
+        }
+
+    }
+
+#if SSR_USE_OPENGL_RECORDING
+    // stop GLInject input
+    m_gl_inject_input.reset();
+#endif
+
+#if SSR_USE_JACK
+    // stop JACK input
+    m_jack_input.reset();
+#endif
+
+    Logger::LogInfo("[PageRecord::StopPage] " + tr("Stopped page."));
+
+
+    m_timer_update_info->stop();
+    OnUpdateInformation();
+
+}
+
+void ssrtools::StartOutput()
+{
+    if (m_output_started) return;
+    try {
+        Logger::LogInfo("[Begin Record: StartOutput]" + tr("Starting output ..."));
+
+        if (m_output_manager == NULL) {
+            //set the file name
+            m_output_settings.file = GetNewSegmentFile(m_file_base, m_add_timestamp);
+            qDebug() << "[record debug] m_output_settings.file: "  << m_output_settings.file;
+
+            //for X11 recording, update the video size (if possible)
+            if (m_x11_input != NULL) {
+                m_x11_input->GetCurrentSize(&m_video_in_width, &m_video_in_height);
+            }
+
+            // calculate the output width and height
+//            if(m_video_scaling) {
+                // Only even width and height is allowed because some pixel formats (e.g. YUV420) require this.
+//                m_output_settings.video_width = m_video_scaled_width / 2 * 2;
+//                m_output_settings.video_height = m_video_scaled_height / 2 * 2;
+//            } else {
+                // If the user did not explicitly select scaling, then don't force scaling just because the recording area is one pixel too large.
+                // One missing row/column of pixels is probably better than a blurry video (and scaling is SLOW).
+            m_video_in_width = m_video_in_width / 2 * 2;
+            m_video_in_height = m_video_in_height / 2 * 2;
+            m_output_settings.video_width = m_video_in_width;
+            m_output_settings.video_height = m_video_in_height;
+//            }
+
+        //start the output
+            m_output_manager.reset(new OutputManager(m_output_settings));
+
+        } else {
+
+            // start a new segment
+            m_output_manager->GetSynchronizer()->NewSegment();
+        }
+
+        Logger::LogInfo("[PageRecord::StartOutput] " + tr("Started output."));
+
+        m_output_started = true;
+        m_recorded_something = true;
+//        UpdateSysTray();
+//        UpdateRecordButton();
+        UpdateInput();
+        UpdateRecordButton();
+
+    } catch(...) {
+        Logger::LogError("[PageRecord::StartOutput] " + tr("Error: Something went wrong during initialization."));
+    }
+}
+
+void ssrtools::StopOutput(bool final)
+{
+//    assert(m_page_started);
+
+    if(!m_output_started)
+        return;
+
+    Logger::LogInfo("[PageRecord::StopOutput] " + tr("Stopping output ..."));
+
+    // if final, then StopPage will stop the output (and delete the file if needed)
+//    if(m_separate_files && !final) {
+    if(m_separate_files && !final) {
+
+        // stop the output
+        FinishOutput();
+        m_output_manager.reset();
+
+        // change the file name
+        m_output_settings.file = QString();
+
+        // reset the output video size
+        m_output_settings.video_width = 0;
+        m_output_settings.video_height = 0;
+
+    }
+
+    Logger::LogInfo("[PageRecord::StopOutput] " + tr("Stopped output."));
+
+#if SSR_USE_ALSA
+    // if final, don't play the notification (it would get interrupted anyway)
+    if(m_simple_synth != NULL && !final)
+        m_simple_synth->PlaySequence(SEQUENCE_RECORD_STOP.data(), SEQUENCE_RECORD_STOP.size());
+#endif
+
+    m_output_started = false;
+//    UpdateSysTray();
+    UpdateRecordButton();
+    UpdateInput();
 }
 
 void ssrtools::StartInput()
@@ -427,60 +549,16 @@ void ssrtools::on_m_toolButton_options_clicked()
 
 void ssrtools::on_m_pushButton_start_clicked()
 {
-    m_file_base = mp->GetFile();
-    m_video_x = GetVideoX();
-    m_video_y = GetVideoY();
-    m_video_in_width = GetVideoW();
-    m_video_in_height = GetVideoH();
-
-
-    if (m_output_started) return;
-    try {
-        Logger::LogInfo("[Begin Record: StartOutput]" + tr("Starting output ..."));
-
-        if (m_output_manager == NULL) {
-            //set the file name
-            m_output_settings.file = GetNewSegmentFile(m_file_base, m_add_timestamp);
-            qDebug() << "[record debug] m_output_settings.file: "  << m_output_settings.file;
-
-            //for X11 recording, update the video size (if possible)
-            if (m_x11_input != NULL) {
-                m_x11_input->GetCurrentSize(&m_video_in_width, &m_video_in_height);
-            }
-
-            // calculate the output width and height
-//            if(m_video_scaling) {
-                // Only even width and height is allowed because some pixel formats (e.g. YUV420) require this.
-//                m_output_settings.video_width = m_video_scaled_width / 2 * 2;
-//                m_output_settings.video_height = m_video_scaled_height / 2 * 2;
-//            } else {
-                // If the user did not explicitly select scaling, then don't force scaling just because the recording area is one pixel too large.
-                // One missing row/column of pixels is probably better than a blurry video (and scaling is SLOW).
-            m_video_in_width = m_video_in_width / 2 * 2;
-            m_video_in_height = m_video_in_height / 2 * 2;
-            m_output_settings.video_width = m_video_in_width;
-            m_output_settings.video_height = m_video_in_height;
-//            }
-
-        //start the output
-            m_output_manager.reset(new OutputManager(m_output_settings));
-
-        } else {
-
-            // start a new segment
-            m_output_manager->GetSynchronizer()->NewSegment();
-        }
-
-        Logger::LogInfo("[PageRecord::StartOutput] " + tr("Started output."));
-
-        m_output_started = true;
-        m_recorded_something = true;
-//        UpdateSysTray();
-//        UpdateRecordButton();
-        UpdateInput();
-
-    } catch(...) {
-        Logger::LogError("[PageRecord::StartOutput] " + tr("Error: Something went wrong during initialization."));
+//    if(m_page_started && m_output_started) {
+    static bool cancel_save_show = false;
+    if (!cancel_save_show) {
+        GroupVisible({ui->m_pushButton_cancel, ui->m_pushButton_save}, true);
+        cancel_save_show = true;
+    }
+    if(m_output_started) {
+        OnRecordPause();
+    } else {
+        OnRecordStart();
     }
 }
 
@@ -505,7 +583,83 @@ void ssrtools::OnUpdateRecordingFrame()
 
 void ssrtools::OnUpdateVideoAreaFields()
 {
-    mp->OnUpdateVideoAreaFields();
+    switch(GetVideoArea()) {
+    case ssr::enum_video_area::VIDEO_AREA_SCREEN: {
+        GroupVisible({ui->m_pushbutton_video_select_rectangle, ui->m_pushbutton_video_select_window}, false);
+        int sc;
+        mp->OnUpdateVideoAreaFields(sc);
+        std::vector<QRect> screen_geometries = GetScreenGeometries();
+        QRect rect;
+        if (sc > 0 && sc <= (int)screen_geometries.size()) {
+            rect = screen_geometries[sc - 1];
+        } else {
+            rect = CombineScreenGeometries(screen_geometries);
+        }
+        SetVideoX(rect.left());
+        SetVideoY(rect.top());
+        SetVideoW(rect.width());
+        SetVideoH(rect.height());
+        break;
+    }
+    case ssr::enum_video_area::VIDEO_AREA_FIXED: {
+        GroupVisible({ui->m_pushbutton_video_select_rectangle, ui->m_pushbutton_video_select_window}, true);
+        break;
+    }
+    case ssr::enum_video_area::VIDEO_AREA_CURSOR: {
+        GroupVisible({ui->m_pushbutton_video_select_rectangle, ui->m_pushbutton_video_select_window}, true);
+        break;
+    }
+    default:
+        break;
+    }
+    //    mp->OnUpdateVideoAreaFields();
+}
+
+void ssrtools::OnRecordCancel()
+{
+    StopPage(false);
+}
+
+void ssrtools::OnRecordSave()
+{
+    StopPage(true);
+}
+
+void ssrtools::OnScheduleTimer()
+{
+/*    if(!m_page_started)
+        return;
+    if(m_schedule_active) {
+        QDateTime now = QDateTime::currentDateTimeUtc();
+        while(m_schedule_position < m_schedule_entries.size()) {
+            ScheduleEntry &entry = m_schedule_entries[m_schedule_position];
+            if(now < entry.time)
+                break;
+            Logger::LogInfo("[PageRecord::OnScheduleTimer] " + tr("Triggering scheduled action '%1' ...").arg(EnumToString(entry.action)));
+            switch(entry.action) {
+                case SCHEDULE_ACTION_START: OnRecordStart(); break;
+                case SCHEDULE_ACTION_PAUSE: OnRecordPause(); break;
+                default: break; // to keep GCC happy
+            }
+            ++m_schedule_position;
+        }
+        if(m_schedule_position < m_schedule_entries.size()) {
+            ScheduleEntry &entry = m_schedule_entries[m_schedule_position];
+            int64_t msec = now.msecsTo(entry.time);
+            m_label_schedule_status->setText(tr("Schedule: %1 in %2").arg(SCHEDULE_ACTION_TEXT[entry.action]).arg(ReadableTime(msec * 1000)));
+            if(msec < 1000) {
+                m_timer_schedule->start(msec);
+            } else {
+                m_timer_schedule->start((msec - 100) % 1000 + 100);
+            }
+        } else {
+            m_label_schedule_status->setText(tr("Schedule: (none)"));
+            m_timer_schedule->stop();
+        }
+    } else {
+        m_label_schedule_status->setText(tr("Schedule: (inactive)"))*/;
+//        m_timer_schedule->stop();
+//    }
 }
 
 void ssrtools::mousePressEvent(QMouseEvent *event)
@@ -823,6 +977,22 @@ void ssrtools::LoadOutputProfileSettings(QSettings *settings)
 
 }
 
+void ssrtools::OnRecordPause()
+{
+    StopOutput(false);
+}
+
+void ssrtools::OnRecordStart()
+{
+    m_file_base = mp->GetFile();
+    m_video_x = GetVideoX();
+    m_video_y = GetVideoY();
+    m_video_in_width = GetVideoW();
+    m_video_in_height = GetVideoH();
+
+    StartOutput();
+}
+
 #if SSR_USE_PULSEAUDIO
 QString ssrtools::GetPulseAudioSourceName() {
     return QString::fromStdString(m_pulseaudio_sources[GetPulseAudioSource()].m_name);
@@ -905,6 +1075,36 @@ void ssrtools::LoadPulseAudioSources() {
 }
 #endif
 
+void ssrtools::FinishOutput()
+{
+    assert(m_output_manager != NULL);
+
+    // tell the output manager to finish
+    m_output_manager->Finish();
+
+    // wait until it has actually finished
+//    m_wait_saving = true;
+    //unsigned int frames_left = m_output_manager->GetVideoEncoder()->GetFrameLatency();
+    unsigned int frames_done = 0, frames_total = 0;
+    QProgressDialog dialog(tr("Encoding remaining data ..."), QString(), 0, frames_total, this);
+    dialog.setWindowModality(Qt::WindowModal);
+    dialog.setCancelButton(NULL);
+    dialog.setMinimumDuration(500);
+    while(!m_output_manager->isFinished()) {
+        unsigned int frames = m_output_manager->GetTotalQueuedFrameCount();
+        if(frames > frames_total)
+            frames_total = frames;
+        if(frames_total - frames > frames_done)
+            frames_done = frames_total - frames;
+        //qDebug() << "frames_done" << frames_done << "frames_total" << frames_total << "frames" << frames;
+        dialog.setMaximum(frames_total);
+        dialog.setValue(frames_done);
+        usleep(20000);
+    }
+//    m_wait_saving = false;
+
+}
+
 void ssrtools::UpdateInput()
 {
     if (m_output_started) {	//m_previewing
@@ -958,4 +1158,35 @@ void ssrtools::UpdateInput()
 //        m_audio_previewer->ConnectAudioSource(NULL);
 //    }
 
+}
+
+void ssrtools::UpdateRecordButton()
+{
+    if(m_output_started) {
+//        ui->m_pushButton_start->setIcon(g_icon_pause);
+        ui->m_pushButton_start->setText(tr("Pause recording"));
+    } else {
+//        ui->m_pushButton_start->setIcon(g_icon_record);
+        ui->m_pushButton_start->setText(tr("Start recording"));
+    }
+}
+
+void ssrtools::UpdateSchedule()
+{
+//    if(!m_page_started)
+//        return;
+//    if(m_schedule_active) {
+//        m_pushbutton_schedule_activate->setText(tr("Deactivate schedule"));
+//        m_schedule_position = 0;
+//        QDateTime now = QDateTime::currentDateTimeUtc();
+//        while(m_schedule_position < m_schedule_entries.size()) {
+//            ScheduleEntry &entry = m_schedule_entries[m_schedule_position];
+//            if(now < entry.time)
+//                break;
+//            ++m_schedule_position;
+//        }
+//    } else {
+//        m_pushbutton_schedule_activate->setText(tr("Activate schedule"));
+//    }
+    OnScheduleTimer();
 }

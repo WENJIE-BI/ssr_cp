@@ -29,6 +29,7 @@
 #include <QComboBox>
 #include <QSpinBox>
 #include <QLineEdit>
+#include <QProgressDialog>
 
 #include "Logger.h"
 

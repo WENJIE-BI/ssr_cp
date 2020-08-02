@@ -29,25 +29,12 @@
   <widget class="QWidget" name="widget" native="true">
    <property name="geometry">
     <rect>
-     <x>230</x>
-     <y>280</y>
+     <x>190</x>
+     <y>340</y>
      <width>71</width>
      <height>80</height>
     </rect>
    </property>
-   <widget class="QLabel" name="label_2">
-    <property name="geometry">
-     <rect>
-      <x>10</x>
-      <y>10</y>
-      <width>55</width>
-      <height>18</height>
-     </rect>
-    </property>
-    <property name="text">
-     <string>TextLabel</string>
-    </property>
-   </widget>
   </widget>
   <widget class="QWidget" name="layoutWidget">
    <property name="geometry">
@@ -134,67 +121,6 @@
      <widget class="QPushButton" name="m_pushbutton_video_select_window">
       <property name="text">
        <string>select window</string>
-      </property>
-     </widget>
-    </item>
-   </layout>
-  </widget>
-  <widget class="QWidget" name="layoutWidget">
-   <property name="geometry">
-    <rect>
-     <x>40</x>
-     <y>240</y>
-     <width>560</width>
-     <height>28</height>
-    </rect>
-   </property>
-   <layout class="QHBoxLayout" name="horizontalLayout">
-    <item>
-     <widget class="QRadioButton" name="m_radioButton_fullscreen">
-      <property name="text">
-       <string>fullscreen</string>
-      </property>
-     </widget>
-    </item>
-    <item>
-     <widget class="QRadioButton" name="m_radioButton_fixed">
-      <property name="text">
-       <string>fixed</string>
-      </property>
-     </widget>
-    </item>
-    <item>
-     <widget class="QRadioButton" name="m_radioButton_cursor">
-      <property name="text">
-       <string>cursor</string>
-      </property>
-     </widget>
-    </item>
-    <item>
-     <widget class="QCheckBox" name="m_checkbox_record_cursor">
-      <property name="text">
-       <string>record cursor</string>
-      </property>
-     </widget>
-    </item>
-    <item>
-     <widget class="QCheckBox" name="m_checkbox_audio_enable">
-      <property name="text">
-       <string>enable audio</string>
-      </property>
-     </widget>
-    </item>
-    <item>
-     <widget class="QToolButton" name="m_toolButton_options">
-      <property name="text">
-       <string>option</string>
-      </property>
-     </widget>
-    </item>
-    <item>
-     <widget class="QPushButton" name="m_pushButton_start">
-      <property name="text">
-       <string>start</string>
       </property>
      </widget>
     </item>
@@ -322,6 +248,106 @@
      <widget class="QLabel" name="m_label_info_bit_rate">
       <property name="text">
        <string>TextLabel</string>
+      </property>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QLabel" name="label_2">
+   <property name="geometry">
+    <rect>
+     <x>200</x>
+     <y>370</y>
+     <width>55</width>
+     <height>18</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>TextLabel</string>
+   </property>
+  </widget>
+  <widget class="QWidget" name="">
+   <property name="geometry">
+    <rect>
+     <x>42</x>
+     <y>241</y>
+     <width>560</width>
+     <height>28</height>
+    </rect>
+   </property>
+   <layout class="QHBoxLayout" name="horizontalLayout">
+    <item>
+     <widget class="QRadioButton" name="m_radioButton_fullscreen">
+      <property name="text">
+       <string>fullscreen</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QRadioButton" name="m_radioButton_fixed">
+      <property name="text">
+       <string>fixed</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QRadioButton" name="m_radioButton_cursor">
+      <property name="text">
+       <string>cursor</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QCheckBox" name="m_checkbox_record_cursor">
+      <property name="text">
+       <string>record cursor</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QCheckBox" name="m_checkbox_audio_enable">
+      <property name="text">
+       <string>enable audio</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QToolButton" name="m_toolButton_options">
+      <property name="text">
+       <string>option</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QPushButton" name="m_pushButton_start">
+      <property name="text">
+       <string>start</string>
+      </property>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QWidget" name="">
+   <property name="geometry">
+    <rect>
+     <x>470</x>
+     <y>290</y>
+     <width>168</width>
+     <height>28</height>
+    </rect>
+   </property>
+   <layout class="QHBoxLayout" name="horizontalLayout_3">
+    <item>
+     <widget class="QPushButton" name="m_pushButton_cancel">
+      <property name="text">
+       <string>cancel</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QPushButton" name="m_pushButton_save">
+      <property name="text">
+       <string>save</string>
       </property>
      </widget>
     </item>

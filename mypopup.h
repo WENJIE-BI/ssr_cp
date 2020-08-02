@@ -11,8 +11,8 @@
 namespace Ui {
 class mypopup;
 }
-
 class ssrtools;
+
 
 class mypopup : public QWidget
 {
@@ -57,6 +57,9 @@ public slots:
     void OnUpdateSuffixAndContainerFields();
     void OnUpdateContainerFields();
 
+public:
+    void OnUpdateVideoAreaFields(int& sc);
+
 private slots:
     void OnIdentifyScreens();
     void OnStopIdentifyScreens();
@@ -65,6 +68,7 @@ private slots:
 
 
 public:
+    inline Ui::mypopup *GetUi() {return ui;}
     ssr::enum_container GetContainer();
     unsigned int GetContainerAV();
     inline void SetContainer(ssr::enum_container container);

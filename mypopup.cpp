@@ -206,12 +206,41 @@ QString mypopup::GetAudioKBitRateName()
     return audio_kbit_rates[audio_kbirt_rate].rate;
 }
 
-
 void mypopup::OnUpdateVideoAreaFields()
 {
     switch(ssr->GetVideoArea()) {
     case ssr::enum_video_area::VIDEO_AREA_SCREEN: {
         int sc = ui->m_comboBox_videores->currentIndex();
+        std::vector<QRect> screen_geometries = GetScreenGeometries();
+        QRect rect;
+        if (sc > 0 && sc <= (int)screen_geometries.size()) {
+            rect = screen_geometries[sc - 1];
+        } else {
+            rect = CombineScreenGeometries(screen_geometries);
+        }
+        ssr->SetVideoX(rect.left());
+        ssr->SetVideoY(rect.top());
+        ssr->SetVideoW(rect.width());
+        ssr->SetVideoH(rect.height());
+        break;
+    }
+    case ssr::enum_video_area::VIDEO_AREA_FIXED: {
+        break;
+    }
+    case ssr::enum_video_area::VIDEO_AREA_CURSOR: {
+        break;
+    }
+    default:
+        break;
+    }
+}
+
+
+void mypopup::OnUpdateVideoAreaFields(int &sc)
+{
+    switch(ssr->GetVideoArea()) {
+    case ssr::enum_video_area::VIDEO_AREA_SCREEN: {
+        sc = ui->m_comboBox_videores->currentIndex();
         std::vector<QRect> screen_geometries = GetScreenGeometries();
         QRect rect;
         if (sc > 0 && sc <= (int)screen_geometries.size()) {

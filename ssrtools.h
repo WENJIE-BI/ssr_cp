@@ -21,21 +21,6 @@ class ssrtools;
 class mypopup;
 class X11Input;
 
-class input_widgets : public QWidget
-{
-
-};
-
-class output_widgets : public QWidget
-{
-
-};
-
-class record_widgets : public QWidget
-{
-
-};
-
 
 class ssrtools : public QWidget
 {
@@ -63,6 +48,9 @@ public:
 
 
     //record
+    void StopPage(bool save);
+    void StartOutput();
+    void StopOutput(bool final);
     void StartInput();
     void StopInput();
 
@@ -84,6 +72,9 @@ private:
     void LoadInputProfileSettings(QSettings* settings);
     void LoadOutputProfileSettings(QSettings* settings);
 
+    void OnRecordPause();
+    void OnRecordStart();
+
 public:
 #if SSR_USE_PULSEAUDIO
     QString GetPulseAudioSourceName();
@@ -101,12 +92,17 @@ private:
 #endif
 
     //record
+    void FinishOutput();
     void UpdateInput();
-
+    void UpdateRecordButton();
+    void UpdateSchedule();
 
 public slots:
     void OnUpdateRecordingFrame();
     void OnUpdateVideoAreaFields();
+    void OnRecordCancel();
+    void OnRecordSave();
+    void OnScheduleTimer();
 
 protected:
     virtual void mousePressEvent(QMouseEvent* event) override;
@@ -148,6 +144,9 @@ private:
 #endif
 
     ssr::enum_audio_backend m_audio_backend;
+
+    bool m_separate_files;
+
     std::unique_ptr<X11Input> m_x11_input;
 #if SSR_USE_PULSEAUDIO
     QString m_pulseaudio_source;
@@ -200,6 +199,8 @@ private:
 
     QTimer *m_timer_schedule, *m_timer_update_info;
 
+    bool m_schedule_active;
+
 
 public:
     inline ssr::enum_video_area GetVideoArea() { return (ssr::enum_video_area) clamp(m_buttongroup_video_area->checkedId(), 0, int(ssr::enum_video_area::VIDEO_AREA_COUNT) - 1); }
@@ -224,6 +225,8 @@ public:
     inline std::vector<AudioCodecData> GetAudioCodecs() { return m_audio_codecs; }
     inline std::vector<AudioCodecData> GetAudioCodecsAV() { return m_audio_codecs_av; }
     inline std::vector<AudioKBitRate> GetAudioKBitRates() { return m_audio_kbit_rates; }
+
+    inline Ui::ssrtools* GetUi() { return ui; }
 
 
 #if SSR_USE_PULSEAUDIO
