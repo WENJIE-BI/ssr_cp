@@ -268,7 +268,7 @@ void ssrtools::Prepare_Record()
     m_pulseaudio_source = GetPulseAudioSourceName();
 #endif
 
-    m_separate_files = false;
+    m_separate_files = true;
 
     //get the output settings
     m_output_settings.file = QString();	//will be set later

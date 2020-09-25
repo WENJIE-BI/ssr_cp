@@ -18,6 +18,7 @@ OutputManager::OutputManager(const OutputSettings &output_settings)
     m_output_settings = output_settings;
 
     m_fragmented = false;
+//    m_fragmented = true;
     m_fragment_length = 5;
 
     //initialize shared data

@@ -212,6 +212,9 @@ void BaseEncoder::EncoderThread()
         m_error_occurred = true;
         Logger::LogError("[BaseEncoder::EncoderThread] " + Logger::tr("Unknown exception in encoder thread."));
     }
+
+    // always end the stream, even if there was an error, otherwise the muxer will wait forever
+    m_muxer->EndStream(m_stream->index);
 }
 
 
